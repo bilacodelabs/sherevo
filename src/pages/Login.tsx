@@ -17,7 +17,7 @@ export const Login: React.FC = () => {
 
   const demoCredentials = [
     { email: 'admin@nialike.com', password: 'admin123', label: 'Admin Demo' },
-    { email: 'customer@xample.com', password: 'customer123', label: 'User Demo' }
+    { email: 'customer@example.com', password: 'customer123', label: 'User Demo' }
   ]
 
   const handleSubmit = async (e: React.FormEvent) => {

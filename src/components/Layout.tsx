@@ -43,10 +43,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleSignOut = async () => {
     try {
+      console.log('Signing out...')
+      localStorage.clear();
       await signOut()
-      navigate('/login')
+      console.log('Signed out, navigating to /login')
     } catch (error) {
       console.error('Error signing out:', error)
+    } finally {
+      navigate('/login')
     }
   }
 

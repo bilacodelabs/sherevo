@@ -490,6 +490,7 @@ ${mappingDetails}
   }
 
   const handleSendInvitations = async () => {
+    console.log('--- handleSendInvitations START ---')
     setShowSendModal(false)
     setShowProgressDialog(true)
     setDismissed(false)
@@ -497,74 +498,152 @@ ${mappingDetails}
     setProgress(0)
     setTotal(selectedGuests.length)
     setResults([])
-
+    console.log('Selected guests:', selectedGuests)
+    console.log('sendViaWhatsApp:', sendViaWhatsApp, 'sendViaSMS:', sendViaSMS)
     let localResults: string[] = []
     let sentCount = 0
-    
     // Validate WhatsApp configuration
     if (sendViaWhatsApp) {
+      console.log('WhatsApp sending enabled, checking config...')
       if (!userConfig?.whatsapp_enabled) {
+        console.log('WhatsApp not enabled')
         alert('WhatsApp is not enabled. Please enable it in Settings → Configurations.')
         setShowProgressDialog(false)
         setIsSending(false)
         return
       }
       if (!userConfig.whatsapp_api_key) {
+        console.log('WhatsApp API key missing')
         alert('WhatsApp API Key is missing. Please add it in Settings → Configurations.')
         setShowProgressDialog(false)
         setIsSending(false)
         return
       }
       if (!userConfig.whatsapp_phone_number_id) {
+        console.log('WhatsApp phone number ID missing')
         alert('WhatsApp Phone Number ID is missing. Please add it in Settings → Configurations.')
         setShowProgressDialog(false)
         setIsSending(false)
         return
       }
-      
       // Check WhatsApp Business Account status
       console.log('Checking WhatsApp Business Account status...')
       const waStatus = await checkWhatsAppStatus()
       if (!waStatus.valid) {
+        console.log('WhatsApp config error:', waStatus.error)
         alert(`WhatsApp configuration error: ${waStatus.error}`)
         setShowProgressDialog(false)
         setIsSending(false)
         return
       }
-      
       if (!waStatus.verified) {
+        console.log('WhatsApp phone number not verified')
         alert('WhatsApp phone number is not verified. Please verify your phone number in Meta Developer Console.')
         setShowProgressDialog(false)
         setIsSending(false)
         return
       }
-      
       console.log('WhatsApp status check passed:', waStatus)
     }
-    
     // Validate SMS configuration
     if (sendViaSMS) {
+      console.log('SMS sending enabled, checking config...')
       if (!userConfig?.sms_enabled) {
+        console.log('SMS not enabled')
         alert('SMS is not enabled. Please enable it in Settings → Configurations.')
         setShowProgressDialog(false)
         setIsSending(false)
         return
       }
       if (!userConfig.sms_api_key) {
+        console.log('SMS API key missing')
         alert('SMS API Key is missing. Please add it in Settings → Configurations.')
         setShowProgressDialog(false)
         setIsSending(false)
         return
       }
     }
-    
+    console.log('Entering guest loop...')
     for (const [i, guestId] of selectedGuests.entries()) {
       const guest = guests.find(g => g.id === guestId)
-      if (!guest) continue
+      if (!guest) {
+        console.log('Guest not found for id:', guestId)
+        continue
+      }
       setCurrentGuest(guest.name)
-      
+      console.log(`Processing guest ${i + 1}/${selectedGuests.length}:`, guest.name)
+      // SMS
+      if (sendViaSMS && userConfig?.sms_enabled && selectedEventData) {
+        console.log('Attempting SMS send for', guest.name)
+        try {
+          // 1. Get the event SMS config for 'invitation' and join with template
+          const { data: smsConfig, error: smsConfigError } = await supabase
+            .from('event_sms_configurations')
+            .select('*, sms_templates: sms_template_id (*)')
+            .eq('event_id', selectedEvent)
+            .eq('purpose', 'invitation')
+            .single()
+          if (smsConfigError || !smsConfig?.sms_templates) {
+            console.log('No SMS template config found for', guest.name)
+            localResults.push(`SMS failed for ${guest.name}: No SMS template configured`)
+            continue
+          }
+          // 2. Render the template body with variables
+          let smsBody = smsConfig.sms_templates.body
+          smsBody = smsBody
+            .replace(/{{guest_name}}/g, guest.name)
+            .replace(/{{event_name}}/g, selectedEventData.name)
+            .replace(/{{event_date}}/g, selectedEventData.date)
+            .replace(/{{event_time}}/g, selectedEventData.time || '')
+            .replace(/{{event_venue}}/g, selectedEventData.venue || '')
+            .replace(/{{plus_one_name}}/g, guest.plus_one_name || '')
+            .replace(/{{card_type}}/g, (guest as any).card_type ? (guest as any).card_type : '')
+            .replace(/{{qr_code}}/g, guest.qr_code || '')
+          // Replace all event attributes
+          const eventAttributes = getEventAttributes(selectedEventData.id)
+          eventAttributes.forEach(attr => {
+            smsBody = smsBody.replace(new RegExp(`{{${attr.attribute_key}}}`, 'g'), attr.attribute_value || '')
+          })
+          // Replace card_url with real value if available
+          const cardUrl = (guest as any).card_url || ''
+          smsBody = smsBody.replace(/{{card_url}}/g, cardUrl)
+          console.log('Rendered SMS body for', guest.name, ':', smsBody)
+          // 3. Send SMS
+          const smsRes = await fetchWithTimeout('https://nialike-n8n.bilacodelabs.xyz/webhook/sms-invitation', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              from: import.meta.env.VITE_ADMIN_SMS_SENDER_ID,
+              to: guest.phone,
+              text: smsBody,
+              reference: guest.id
+            }),
+            timeout: 15000
+          }) as Response
+          console.log('SMS API response for', guest.name, ':', smsRes)
+          if (smsRes.ok) {
+            localResults.push(`SMS sent to ${guest.name}`)
+            await updateGuest(guest.id, { 
+              delivery_status: 'sent',
+              invited_at: new Date().toISOString()
+            })
+          } else {
+            localResults.push(`SMS failed for ${guest.name}`)
+            console.error('SMS failed for', guest.name, 'Status:', smsRes.status, smsRes.statusText)
+          }
+        } catch (err) {
+          localResults.push(`SMS error for ${guest.name}`)
+          console.error('SMS sending error for', guest.name, err)
+        }
+      } else {
+        console.log('Skipping SMS for', guest.name)
+      }
       // WhatsApp
-      if (sendViaWhatsApp && userConfig?.whatsapp_enabled && userConfig.whatsapp_api_key && userConfig.whatsapp_phone_number_id) {
+      if (sendViaWhatsApp && userConfig?.whatsapp_enabled && userConfig.whatsapp_api_key && userConfig.whatsapp_phone_number_id && selectedEventData) {
+        console.log('Attempting WhatsApp send for', guest.name)
         try {
           // Get event message configuration
           const { data: eventConfig, error: configError } = await supabase
@@ -573,21 +652,82 @@ ${mappingDetails}
             .eq('event_id', selectedEvent)
             .eq('channel', 'whatsapp')
             .single()
-          
           if (configError || !eventConfig) {
+            console.log('No WhatsApp template config found for', guest.name)
             localResults.push(`WhatsApp failed for ${guest.name}: No template configuration found`)
             continue
           }
-          
           // Generate card image
-          const cardImageUrl = await generateCardImage(guest, selectedEventData)
-          
+          const cardImageUrl = (guest as any).card_url || await generateCardImage(guest, selectedEventData)
+          // Prepare template parameters based on variable mapping
+          const eventAttributes = getEventAttributes(selectedEventData.id)
+          const templateParams = Object.entries(eventConfig.variable_mapping || {}).map(([key, value]) => {
+            let paramValue = ''
+            let paramType = 'text'
+            const valueStr = String(value)
+            const normalizedValue = valueStr.replace(/\./g, '_')
+            switch (normalizedValue) {
+              case 'guest_name':
+                paramValue = guest.name
+                break
+              case 'event_name':
+                paramValue = selectedEventData.name
+                break
+              case 'event_date':
+                paramValue = new Date(selectedEventData.date).toLocaleDateString()
+                break
+              case 'event_time':
+                paramValue = selectedEventData.time || ''
+                break
+              case 'event_venue':
+                paramValue = selectedEventData.venue || ''
+                break
+              case 'event_dress_code':
+                paramValue = selectedEventData.dress_code || ''
+                break
+              case 'plus_one_name':
+                paramValue = guest.plus_one_name || ''
+                break
+              case 'card_url':
+                paramValue = cardImageUrl || ''
+                paramType = 'image'
+                break
+              default:
+                // Check for event attribute
+                const attr = eventAttributes.find(a => a.attribute_key === normalizedValue)
+                if (attr) {
+                  paramValue = attr.attribute_value || ''
+                } else if (valueStr.includes('.')) {
+                  const [objectName, propertyName] = valueStr.split('.')
+                  if (objectName === 'event' && selectedEventData[propertyName as keyof typeof selectedEventData]) {
+                    paramValue = String(selectedEventData[propertyName as keyof typeof selectedEventData])
+                  } else if (objectName === 'guest' && guest[propertyName as keyof typeof guest]) {
+                    paramValue = String(guest[propertyName as keyof typeof guest])
+                  } else {
+                    paramValue = valueStr
+                  }
+                } else {
+                  paramValue = valueStr
+                }
+            }
+            if (paramType === 'image') {
+              return {
+                type: 'image',
+                image: {
+                  link: paramValue
+                }
+              }
+            } else {
+              return {
+                type: 'text',
+                text: paramValue
+              }
+            }
+          })
           // Send WhatsApp message with card image
           const waResult = await sendWhatsAppWithCardImage(guest, selectedEventData, cardImageUrl, eventConfig)
-          
           if (waResult.success) {
             localResults.push(waResult.message)
-            // Update guest delivery status
             await updateGuest(guest.id, { 
               delivery_status: 'sent',
               invited_at: new Date().toISOString()
@@ -601,80 +741,8 @@ ${mappingDetails}
           localResults.push(`WhatsApp error for ${guest.name}: ${errorMsg}`)
           console.error('WhatsApp sending error:', err)
         }
-      }
-      
-      // SMS
-      if (sendViaSMS && userConfig?.sms_enabled && selectedEventData) {
-        console.log('Starting SMS send for guest:', guest);
-        try {
-          // 1. Get the event SMS config for 'invitation' and join with template
-          console.log('Fetching SMS config for event', selectedEvent, 'and guest', guest.name);
-          const { data: smsConfig, error: smsConfigError } = await supabase
-            .from('event_sms_configurations')
-            .select('*, sms_templates: sms_template_id (*)')
-            .eq('event_id', selectedEvent)
-            .eq('purpose', 'invitation')
-            .single();
-
-          if (smsConfigError || !smsConfig?.sms_templates) {
-            console.warn('No SMS template configured or error:', smsConfigError);
-            localResults.push(`SMS failed for ${guest.name}: No SMS template configured`);
-            continue;
-          }
-
-          // 2. Render the template body with variables
-          let smsBody = smsConfig.sms_templates.body;
-          console.log('Template body before rendering:', smsBody);
-          smsBody = smsBody
-            .replace(/{{guest_name}}/g, guest.name)
-            .replace(/{{event_name}}/g, selectedEventData.name)
-            .replace(/{{event_date}}/g, selectedEventData.date)
-            .replace(/{{event_time}}/g, selectedEventData.time || '')
-            .replace(/{{event_venue}}/g, selectedEventData.venue || '')
-            .replace(/{{plus_one_name}}/g, guest.plus_one_name || '')
-            .replace(/{{card_type}}/g, (guest as any).card_type ? (guest as any).card_type : '')
-            .replace(/{{qr_code}}/g, guest.qr_code || '')
-            .replace(/{{card_url}}/g, 'https://your-card-url.com');
-          console.log('Rendered SMS body:', smsBody);
-
-          // 3. Send SMS via Next SMS API
-          console.log('About to send SMS via Next SMS API:', {
-            from: import.meta.env.VITE_ADMIN_SMS_SENDER_ID,
-            to: guest.phone,
-            text: smsBody,
-            reference: guest.id
-          });
-          const smsRes = await fetchWithTimeout('https://messaging-service.co.tz/api/sms/v1/test/text/single', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Basic ${import.meta.env.VITE_ADMIN_SMS_AUTHORIZATION_TOKEN}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-              from: import.meta.env.VITE_ADMIN_SMS_SENDER_ID,
-              to: guest.phone,
-              text: smsBody,
-              reference: guest.id
-            }),
-            timeout: 15000
-          }) as Response;
-          console.log('SMS API response:', smsRes);
-
-          if (smsRes.ok) {
-            localResults.push(`SMS sent to ${guest.name}`);
-            await updateGuest(guest.id, { 
-              delivery_status: 'sent',
-              invited_at: new Date().toISOString()
-            });
-          } else {
-            localResults.push(`SMS failed for ${guest.name}`);
-            console.error('SMS failed for', guest.name, 'Status:', smsRes.status, smsRes.statusText);
-          }
-        } catch (err) {
-          localResults.push(`SMS error for ${guest.name}`);
-          console.error('SMS sending error for', guest.name, err);
-        }
+      } else {
+        console.log('Skipping WhatsApp for', guest.name)
       }
       sentCount++
       setProgress(sentCount)
@@ -684,6 +752,7 @@ ${mappingDetails}
     setCurrentGuest(null)
     setSelectedGuests([])
     alert(localResults.join('\n'))
+    console.log('--- handleSendInvitations END ---')
   }
 
   const stats = selectedEventData ? [

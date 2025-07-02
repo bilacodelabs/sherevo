@@ -735,7 +735,7 @@ export const Settings: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Available Variables</label>
                   <div className="space-y-2">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Guest & Event Variables:</div>
-                    {baseVariables.slice(0, 8).map(variable => (
+                    {baseVariables.map(variable => (
                       <button
                         key={variable}
                         type="button"

@@ -215,6 +215,35 @@ ${mappingDetails}
     }
   }
 
+  // Function to generate and persist card image for a guest if not already present
+  const ensureCardImageForGuest = async (guest: any, event: any) => {
+    if (guest.card_url) return guest.card_url;
+    try {
+      // Get the default card design for this event
+      const { data: cardDesign, error: designError } = await supabase
+        .from('card_designs')
+        .select('*')
+        .eq('event_id', event.id)
+        .single();
+      if (designError || !cardDesign) {
+        console.log('No card design found for event, skipping image generation');
+        return null;
+      }
+      // Get event attributes for variable replacement
+      const eventAttributes = getEventAttributes(event.id);
+      console.log('Generating card image for guest:', guest.name);
+      const imageUrl = await generateCardImageForGuest(cardDesign, guest, event, eventAttributes);
+      console.log('Card image generated:', imageUrl);
+      // Persist card_url to guest
+      await updateGuest(guest.id, { card_url: imageUrl });
+      guest.card_url = imageUrl; // update in-memory for this session
+      return imageUrl;
+    } catch (error) {
+      console.error('Error generating card image:', error);
+      return null;
+    }
+  };
+
   // Function 1: Generate card image with filled variables
   const generateCardImage = async (guest: any, event: any): Promise<string | null> => {
     try {
@@ -564,17 +593,25 @@ ${mappingDetails}
       }
     }
     console.log('Entering guest loop...')
-    for (const [i, guestId] of selectedGuests.entries()) {
-      const guest = guests.find(g => g.id === guestId)
-      if (!guest) {
-        console.log('Guest not found for id:', guestId)
-        continue
+    // 1. Ensure all selected guests have card_url generated and persisted
+    for (const guestId of selectedGuests) {
+      const guest = guests.find(g => g.id === guestId);
+      if (!guest) continue;
+      if (!guest.card_url) {
+        await ensureCardImageForGuest(guest, selectedEventData);
       }
-      setCurrentGuest(guest.name)
-      console.log(`Processing guest ${i + 1}/${selectedGuests.length}:`, guest.name)
+    }
+    for (const [i, guestId] of selectedGuests.entries()) {
+      const guest = guests.find(g => g.id === guestId);
+      if (!guest) {
+        console.log('Guest not found for id:', guestId);
+        continue;
+      }
+      setCurrentGuest(guest.name);
+      console.log(`Processing guest ${i + 1}/${selectedGuests.length}:`, guest.name);
       // SMS
       if (sendViaSMS && userConfig?.sms_enabled && selectedEventData) {
-        console.log('Attempting SMS send for', guest.name)
+        console.log('Attempting SMS send for', guest.name);
         try {
           // 1. Get the event SMS config for 'invitation' and join with template
           const { data: smsConfig, error: smsConfigError } = await supabase
@@ -605,8 +642,8 @@ ${mappingDetails}
             smsBody = smsBody.replace(new RegExp(`{{${attr.attribute_key}}}`, 'g'), attr.attribute_value || '')
           })
           // Replace card_url with real value if available
-          const cardUrl = (guest as any).card_url || ''
-          smsBody = smsBody.replace(/{{card_url}}/g, cardUrl)
+          const cardUrl = guest.card_url || '';
+          smsBody = smsBody.replace(/{{card_url}}/g, cardUrl);
           console.log('Rendered SMS body for', guest.name, ':', smsBody)
           // 3. Send SMS
           const smsRes = await fetchWithTimeout('https://nialike-n8n.bilacodelabs.xyz/webhook/sms-invitation', {
@@ -643,7 +680,7 @@ ${mappingDetails}
       }
       // WhatsApp
       if (sendViaWhatsApp && userConfig?.whatsapp_enabled && userConfig.whatsapp_api_key && userConfig.whatsapp_phone_number_id && selectedEventData) {
-        console.log('Attempting WhatsApp send for', guest.name)
+        console.log('Attempting WhatsApp send for', guest.name);
         try {
           // Get event message configuration
           const { data: eventConfig, error: configError } = await supabase
@@ -651,63 +688,63 @@ ${mappingDetails}
             .select('*')
             .eq('event_id', selectedEvent)
             .eq('channel', 'whatsapp')
-            .single()
+            .single();
           if (configError || !eventConfig) {
-            console.log('No WhatsApp template config found for', guest.name)
-            localResults.push(`WhatsApp failed for ${guest.name}: No template configuration found`)
-            continue
+            console.log('No WhatsApp template config found for', guest.name);
+            localResults.push(`WhatsApp failed for ${guest.name}: No template configuration found`);
+            continue;
           }
-          // Generate card image
-          const cardImageUrl = (guest as any).card_url || await generateCardImage(guest, selectedEventData)
+          // Use persisted card_url
+          const cardImageUrl = guest.card_url || '';
           // Prepare template parameters based on variable mapping
-          const eventAttributes = getEventAttributes(selectedEventData.id)
+          const eventAttributes = getEventAttributes(selectedEventData.id);
           const templateParams = Object.entries(eventConfig.variable_mapping || {}).map(([key, value]) => {
-            let paramValue = ''
-            let paramType = 'text'
-            const valueStr = String(value)
-            const normalizedValue = valueStr.replace(/\./g, '_')
+            let paramValue = '';
+            let paramType = 'text';
+            const valueStr = String(value);
+            const normalizedValue = valueStr.replace(/\./g, '_');
             switch (normalizedValue) {
               case 'guest_name':
-                paramValue = guest.name
-                break
+                paramValue = guest.name;
+                break;
               case 'event_name':
-                paramValue = selectedEventData.name
-                break
+                paramValue = selectedEventData.name;
+                break;
               case 'event_date':
-                paramValue = new Date(selectedEventData.date).toLocaleDateString()
-                break
+                paramValue = new Date(selectedEventData.date).toLocaleDateString();
+                break;
               case 'event_time':
-                paramValue = selectedEventData.time || ''
-                break
+                paramValue = selectedEventData.time || '';
+                break;
               case 'event_venue':
-                paramValue = selectedEventData.venue || ''
-                break
+                paramValue = selectedEventData.venue || '';
+                break;
               case 'event_dress_code':
-                paramValue = selectedEventData.dress_code || ''
-                break
+                paramValue = selectedEventData.dress_code || '';
+                break;
               case 'plus_one_name':
-                paramValue = guest.plus_one_name || ''
-                break
+                paramValue = guest.plus_one_name || '';
+                break;
               case 'card_url':
-                paramValue = cardImageUrl || ''
-                paramType = 'image'
-                break
+                paramValue = cardImageUrl || '';
+                paramType = 'image';
+                break;
               default:
                 // Check for event attribute
-                const attr = eventAttributes.find(a => a.attribute_key === normalizedValue)
+                const attr = eventAttributes.find(a => a.attribute_key === normalizedValue);
                 if (attr) {
-                  paramValue = attr.attribute_value || ''
+                  paramValue = attr.attribute_value || '';
                 } else if (valueStr.includes('.')) {
-                  const [objectName, propertyName] = valueStr.split('.')
+                  const [objectName, propertyName] = valueStr.split('.');
                   if (objectName === 'event' && selectedEventData[propertyName as keyof typeof selectedEventData]) {
-                    paramValue = String(selectedEventData[propertyName as keyof typeof selectedEventData])
+                    paramValue = String(selectedEventData[propertyName as keyof typeof selectedEventData]);
                   } else if (objectName === 'guest' && guest[propertyName as keyof typeof guest]) {
-                    paramValue = String(guest[propertyName as keyof typeof guest])
+                    paramValue = String(guest[propertyName as keyof typeof guest]);
                   } else {
-                    paramValue = valueStr
+                    paramValue = valueStr;
                   }
                 } else {
-                  paramValue = valueStr
+                  paramValue = valueStr;
                 }
             }
             if (paramType === 'image') {
@@ -716,33 +753,33 @@ ${mappingDetails}
                 image: {
                   link: paramValue
                 }
-              }
+              };
             } else {
               return {
                 type: 'text',
                 text: paramValue
-              }
+              };
             }
-          })
+          });
           // Send WhatsApp message with card image
-          const waResult = await sendWhatsAppWithCardImage(guest, selectedEventData, cardImageUrl, eventConfig)
+          const waResult = await sendWhatsAppWithCardImage(guest, selectedEventData, cardImageUrl, eventConfig);
           if (waResult.success) {
-            localResults.push(waResult.message)
+            localResults.push(waResult.message);
             await updateGuest(guest.id, { 
               delivery_status: 'sent',
               invited_at: new Date().toISOString()
-            })
+            });
           } else {
-            localResults.push(waResult.message)
-            console.error('WhatsApp sending error:', waResult.message)
+            localResults.push(waResult.message);
+            console.error('WhatsApp sending error:', waResult.message);
           }
         } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-          localResults.push(`WhatsApp error for ${guest.name}: ${errorMsg}`)
-          console.error('WhatsApp sending error:', err)
+          const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+          localResults.push(`WhatsApp error for ${guest.name}: ${errorMsg}`);
+          console.error('WhatsApp sending error:', err);
         }
       } else {
-        console.log('Skipping WhatsApp for', guest.name)
+        console.log('Skipping WhatsApp for', guest.name);
       }
       sentCount++
       setProgress(sentCount)

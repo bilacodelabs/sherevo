@@ -14,7 +14,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: 'customer' | 'super_admin'
+  role: 'customer' | 'super_admin' | 'service_provider'
   avatar: string
   created_at: string
   last_login: string
@@ -187,4 +187,160 @@ export interface EventSmsConfiguration {
   sms_template_id: string
   created_at: string
   updated_at: string
+}
+
+export interface ServiceProvider {
+  id: string
+  user_id: string
+  type: 'caterer' | 'social_hall' | 'mc' | 'photographer' | 'videographer' | 'other'
+  name: string
+  contact_email?: string
+  contact_phone?: string
+  description?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface EventServiceProvider {
+  id: string
+  event_id: string
+  provider_id: string
+  role: string
+  notes?: string
+  created_at: string
+}
+
+export interface Pledge {
+  id: string
+  guest_id: string
+  event_id: string
+  amount: number
+  type: string
+  status: 'pending' | 'fulfilled' | 'cancelled'
+  notes?: string
+  paid_amount?: number
+  created_at: string
+  updated_at: string
+}
+
+// Service Provider API helpers
+export async function getServiceProviderByUser(userId: string) {
+  const { data, error } = await supabase
+    .from('service_providers')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+  if (error) throw error
+  return data as ServiceProvider
+}
+
+export async function updateServiceProviderProfile(providerId: string, updates: Partial<ServiceProvider>) {
+  const { data, error } = await supabase
+    .from('service_providers')
+    .update(updates)
+    .eq('id', providerId)
+    .select()
+    .single()
+  if (error) throw error
+  return data as ServiceProvider
+}
+
+export async function getProviderBookings(providerId: string) {
+  const { data, error } = await supabase
+    .from('event_service_providers')
+    .select('*, event:events(*)')
+    .eq('provider_id', providerId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as (EventServiceProvider & { event: Event })[]
+}
+
+export async function deleteServiceProvider(providerId: string) {
+  const { error } = await supabase
+    .from('service_providers')
+    .delete()
+    .eq('id', providerId)
+  if (error) throw error
+  return true
+}
+
+// Event-ServiceProvider API helpers
+export async function linkProviderToEvent(eventId: string, providerId: string, role: string, notes?: string) {
+  const { data, error } = await supabase
+    .from('event_service_providers')
+    .insert({ event_id: eventId, provider_id: providerId, role, notes })
+    .select()
+    .single()
+  if (error) throw error
+  return data as EventServiceProvider
+}
+
+export async function unlinkProviderFromEvent(eventServiceProviderId: string) {
+  const { error } = await supabase
+    .from('event_service_providers')
+    .delete()
+    .eq('id', eventServiceProviderId)
+  if (error) throw error
+  return true
+}
+
+export async function getEventProviders(eventId: string) {
+  const { data, error } = await supabase
+    .from('event_service_providers')
+    .select('*, provider:service_providers(*)')
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as (EventServiceProvider & { provider: ServiceProvider })[]
+}
+
+// Pledge API helpers
+export async function getPledgesByGuest(guestId: string) {
+  const { data, error } = await supabase
+    .from('pledges')
+    .select('*')
+    .eq('guest_id', guestId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as Pledge[]
+}
+
+export async function getPledgesByEvent(eventId: string) {
+  const { data, error } = await supabase
+    .from('pledges')
+    .select('*')
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as Pledge[]
+}
+
+export async function createPledge(pledge: Omit<Pledge, 'id' | 'created_at' | 'updated_at'>) {
+  const { data, error } = await supabase
+    .from('pledges')
+    .insert(pledge)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Pledge
+}
+
+export async function updatePledge(pledgeId: string, updates: Partial<Pledge>) {
+  const { data, error } = await supabase
+    .from('pledges')
+    .update(updates)
+    .eq('id', pledgeId)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Pledge
+}
+
+export async function deletePledge(pledgeId: string) {
+  const { error } = await supabase
+    .from('pledges')
+    .delete()
+    .eq('id', pledgeId)
+  if (error) throw error
+  return true
 }

@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AppProvider } from './contexts/AppContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -16,6 +16,9 @@ import { Invitations } from './pages/Invitations'
 import { Analytics } from './pages/Analytics'
 import { Settings } from './pages/Settings'
 import EventConfigurations from './pages/EventConfigurations'
+import ServiceProviderDashboard from './pages/ServiceProviderDashboard'
+import ProviderCalendar from './pages/ProviderCalendar'
+import ProviderBookings from './pages/ProviderBookings'
 
 function App() {
   return (
@@ -28,9 +31,12 @@ function App() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={
                 <ProtectedRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
+                  <RoleBasedDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/provider-dashboard" element={
+                <ProtectedRoute>
+                  <ServiceProviderDashboard />
                 </ProtectedRoute>
               } />
               <Route path="/events" element={
@@ -103,11 +109,34 @@ function App() {
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/provider-calendar" element={
+                <ProtectedRoute>
+                  <ProviderCalendar />
+                </ProtectedRoute>
+              } />
+              <Route path="/provider-bookings" element={
+                <ProtectedRoute>
+                  <ProviderBookings />
+                </ProtectedRoute>
+              } />
             </Routes>
           </Router>
         </AppProvider>
       </AuthProvider>
     </ThemeProvider>
+  )
+}
+
+// Role-based dashboard redirector
+function RoleBasedDashboard() {
+  const { user } = useAuth()
+  if (user?.role === 'service_provider') {
+    return <Navigate to="/provider-dashboard" replace />
+  }
+  return (
+    <Layout>
+      <Dashboard />
+    </Layout>
   )
 }
 

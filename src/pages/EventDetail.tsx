@@ -23,7 +23,8 @@ import {
   Star,
   BarChart,
   BarChart3,
-  Phone
+  Phone,
+  Briefcase
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { format } from 'date-fns'
@@ -31,6 +32,8 @@ import { format } from 'date-fns'
 import { QRCodeCanvas } from 'qrcode.react'
 import { EventAttributes } from '../components/EventAttributes'
 import { fillCardVariables } from '../lib/cardImage'
+import { getEventProviders, linkProviderToEvent, unlinkProviderFromEvent, getServiceProviderByUser, getPledgesByEvent, Pledge } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
 export const EventDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -41,6 +44,15 @@ export const EventDetail: React.FC = () => {
   const [showCardModal, setShowCardModal] = useState(false)
   const [previewCard, setPreviewCard] = useState<any | null>(null)
   const [previewGuest, setPreviewGuest] = useState<any | null>(null)
+  const [eventProviders, setEventProviders] = useState<(any & { provider: any })[]>([])
+  const [showAddProvider, setShowAddProvider] = useState(false)
+  const [providerSearch, setProviderSearch] = useState('')
+  const [providerResults, setProviderResults] = useState<any[]>([])
+  const [selectedProvider, setSelectedProvider] = useState<any | null>(null)
+  const [providerRole, setProviderRole] = useState('')
+  const [providerNotes, setProviderNotes] = useState('')
+  const [eventPledges, setEventPledges] = useState<Pledge[]>([])
+  const [pledgesLoading, setPledgesLoading] = useState(true)
 
   const event = events.find(e => e.id === id)
   const eventGuests = guests.filter(g => g.event_id === id)
@@ -51,6 +63,20 @@ export const EventDetail: React.FC = () => {
       navigate('/events')
     }
   }, [event, loading, navigate])
+
+  useEffect(() => {
+    if (!event) return
+    getEventProviders(event.id).then(setEventProviders).catch(console.error)
+  }, [event])
+
+  useEffect(() => {
+    if (!event) return
+    setPledgesLoading(true)
+    getPledgesByEvent(event.id)
+      .then(setEventPledges)
+      .catch(console.error)
+      .finally(() => setPledgesLoading(false))
+  }, [event])
 
   if (loading || !event) {
     return (
@@ -134,6 +160,26 @@ export const EventDetail: React.FC = () => {
       alert('Failed to set default card design')
     }
   }
+
+  const handleAddProvider = async () => {
+    if (!event || !selectedProvider) return
+    await linkProviderToEvent(event.id, selectedProvider.id, providerRole, providerNotes)
+    setShowAddProvider(false)
+    setProviderSearch('')
+    setSelectedProvider(null)
+    setProviderRole('')
+    setProviderNotes('')
+    getEventProviders(event.id).then(setEventProviders).catch(console.error)
+  }
+
+  const handleRemoveProvider = async (espId: string) => {
+    await unlinkProviderFromEvent(espId)
+    getEventProviders(event.id).then(setEventProviders).catch(console.error)
+  }
+
+  const totalPledged = eventPledges.reduce((sum, p) => sum + (p.amount || 0), 0)
+  const totalPaid = eventPledges.reduce((sum, p) => sum + (p.paid_amount || 0), 0)
+  const totalRemaining = totalPledged - totalPaid
 
   return (
     <div className="space-y-6">
@@ -280,9 +326,142 @@ export const EventDetail: React.FC = () => {
         })}
       </div>
 
+      {/* Pledge Summary */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <Star className="w-5 h-5 text-orange-500" /> Pledge Summary
+        </h3>
+        {pledgesLoading ? (
+          <div className="text-gray-500 dark:text-gray-400">Loading pledges...</div>
+        ) : (
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Pledge Amount</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalPledged.toLocaleString()} <span className="text-base font-medium text-gray-500 dark:text-gray-400">TZS</span></div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Paid Amount</div>
+              <div className="text-2xl font-bold text-green-600">{totalPaid.toLocaleString()} <span className="text-base font-medium text-green-600">TZS</span></div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Remaining Amount</div>
+              <div className="text-2xl font-bold" style={{ color: totalRemaining > 0 ? '#ef4444' : undefined }}>{totalRemaining.toLocaleString()} <span className="text-base font-medium" style={{ color: totalRemaining > 0 ? '#ef4444' : undefined }}>TZS</span></div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Event Attributes */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
         <EventAttributes eventId={event.id} />
+      </div>
+
+      {/* Service Providers Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-orange-500" /> Service Providers
+          </h2>
+          <button
+            className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-200"
+            onClick={() => setShowAddProvider(true)}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Provider
+          </button>
+        </div>
+        {eventProviders.length === 0 ? (
+          <div className="text-gray-500 dark:text-gray-400">No providers linked to this event.</div>
+        ) : (
+          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+            {eventProviders.map((esp) => (
+              <li key={esp.id} className="py-3 flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white">{esp.provider?.name}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">{esp.role} | {esp.provider?.contact_email}</div>
+                  {esp.notes && <div className="text-xs text-gray-400 mt-1">Notes: {esp.notes}</div>}
+                </div>
+                <button
+                  className="text-red-500 hover:underline text-sm"
+                  onClick={() => handleRemoveProvider(esp.id)}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {showAddProvider && (
+          <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <div className="mb-2">
+              <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Search Providers by Name or Email</label>
+              <input
+                type="text"
+                value={providerSearch}
+                onChange={async (e) => {
+                  setProviderSearch(e.target.value)
+                  // Simple search: fetch all providers and filter client-side (for demo)
+                  const { data, error } = await supabase
+                    .from('service_providers')
+                    .select('*')
+                    .ilike('name', `%${e.target.value}%`)
+                  setProviderResults(data || [])
+                }}
+                className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                placeholder="Type to search..."
+              />
+            </div>
+            {providerResults.length > 0 && (
+              <ul className="mb-2 divide-y divide-gray-200 dark:divide-gray-700">
+                {providerResults.map((prov) => (
+                  <li
+                    key={prov.id}
+                    className={`py-2 px-2 cursor-pointer rounded hover:bg-orange-100 dark:hover:bg-orange-900/20 ${selectedProvider?.id === prov.id ? 'bg-orange-200 dark:bg-orange-800' : ''}`}
+                    onClick={() => setSelectedProvider(prov)}
+                  >
+                    <div className="font-medium text-gray-900 dark:text-white">{prov.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{prov.type} | {prov.contact_email}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {selectedProvider && (
+              <div className="mb-2">
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Role for this Event</label>
+                <input
+                  type="text"
+                  value={providerRole}
+                  onChange={e => setProviderRole(e.target.value)}
+                  className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  placeholder="e.g. Caterer, MC, Photographer"
+                />
+              </div>
+            )}
+            <div className="mb-2">
+              <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Notes (optional)</label>
+              <textarea
+                value={providerNotes}
+                onChange={e => setProviderNotes(e.target.value)}
+                className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+                onClick={handleAddProvider}
+              >
+                Link Provider
+              </button>
+              <button
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg"
+                onClick={() => setShowAddProvider(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Card Designs Section */}

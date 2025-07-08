@@ -7,7 +7,19 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, name: string) => Promise<void>
+  signUp: (
+    email: string,
+    password: string,
+    name: string,
+    accountType?: 'customer' | 'service_provider',
+    providerFields?: {
+      business: string
+      type: string
+      contact_email: string
+      contact_phone: string
+      description: string
+    }
+  ) => Promise<void>
   signOut: () => Promise<void>
   updateProfile: (updates: Partial<User>) => Promise<void>
 }
@@ -53,27 +65,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const fetchUserProfile = async (userId: string) => {
+    console.debug('fetchUserProfile: start', { userId })
     try {
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .single()
-
       if (error) {
+        console.debug('fetchUserProfile: error', error)
         // If user doesn't exist, create them
         if (error.code === 'PGRST116') {
+          console.debug('fetchUserProfile: user not found, creating profile')
           await createUserProfile(userId)
           return
         }
         throw error
       }
-
+      console.debug('fetchUserProfile: got user', data)
       setUser(data)
     } catch (error) {
+      console.debug('fetchUserProfile: catch error', error)
       console.error('Error fetching user profile:', error)
     } finally {
       setLoading(false)
+      console.debug('fetchUserProfile: done')
     }
   }
 
@@ -101,24 +117,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const signIn = async (email: string, password: string) => {
+    console.debug('signIn: start', { email })
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
-    if (error) throw error
+    if (error) {
+      console.debug('signIn: error', error)
+      throw error
+    }
+    console.debug('signIn: success')
   }
 
-  const signUp = async (email: string, password: string, name: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (
+    email: string,
+    password: string,
+    name: string,
+    accountType: 'customer' | 'service_provider' = 'customer',
+    providerFields?: {
+      business: string
+      type: string
+      contact_email: string
+      contact_phone: string
+      description: string
+    }
+  ) => {
+    // Set role in metadata
+    const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          name
+          name,
+          role: accountType
         }
       }
     })
     if (error) throw error
+
+    // If service provider, create service_providers row
+    if (accountType === 'service_provider' && data.user) {
+      const { user } = data
+      const { error: spError } = await supabase
+        .from('service_providers')
+        .insert({
+          user_id: user.id,
+          type: providerFields?.type || 'other',
+          name: providerFields?.business || name,
+          contact_email: providerFields?.contact_email || email,
+          contact_phone: providerFields?.contact_phone || '',
+          description: providerFields?.description || ''
+        })
+      if (spError) throw spError
+    }
   }
 
   const signOut = async () => {

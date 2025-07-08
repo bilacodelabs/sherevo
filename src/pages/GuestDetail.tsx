@@ -16,10 +16,14 @@ import {
   Eye,
   Plus,
   MessageSquare,
-  Settings
+  Settings,
+  Pencil,
+  Loader2,
+  MinusCircle
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { format } from 'date-fns'
+import { getPledgesByGuest, createPledge, updatePledge, deletePledge, Pledge } from '../lib/supabase'
 
 export const GuestDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -28,6 +32,14 @@ export const GuestDetail: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showNoteModal, setShowNoteModal] = useState(false)
+  const [pledges, setPledges] = useState<Pledge[]>([])
+  const [pledgesLoading, setPledgesLoading] = useState(true)
+  const [showPledgeModal, setShowPledgeModal] = useState(false)
+  const [editingPledge, setEditingPledge] = useState<Pledge | null>(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentPledge, setPaymentPledge] = useState<Pledge | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentLoading, setPaymentLoading] = useState(false)
 
   const guest = guests.find(g => g.id === id)
   const event = guest ? events.find(e => e.id === guest.event_id) : null
@@ -37,6 +49,15 @@ export const GuestDetail: React.FC = () => {
       navigate('/guests')
     }
   }, [guest, loading, navigate])
+
+  useEffect(() => {
+    if (!guest) return
+    setPledgesLoading(true)
+    getPledgesByGuest(guest.id)
+      .then(setPledges)
+      .catch(console.error)
+      .finally(() => setPledgesLoading(false))
+  }, [guest])
 
   if (loading || !guest || !event) {
     return (
@@ -84,6 +105,60 @@ export const GuestDetail: React.FC = () => {
       })
     } catch (error) {
       console.error('Error updating RSVP:', error)
+    }
+  }
+
+  const handlePledgeSave = async (pledge: Partial<Pledge>) => {
+    setPledgesLoading(true)
+    try {
+      if (editingPledge) {
+        await updatePledge(editingPledge.id, pledge)
+      } else {
+        await createPledge({
+          ...pledge,
+          guest_id: guest.id,
+          event_id: event.id,
+          status: 'pending',
+        } as any)
+      }
+      const updated = await getPledgesByGuest(guest.id)
+      setPledges(updated)
+      setShowPledgeModal(false)
+      setEditingPledge(null)
+    } catch (e) {
+      alert('Error saving pledge')
+    } finally {
+      setPledgesLoading(false)
+    }
+  }
+
+  const handlePledgeDelete = async (pledgeId: string) => {
+    if (!window.confirm('Delete this pledge?')) return
+    setPledgesLoading(true)
+    try {
+      await deletePledge(pledgeId)
+      setPledges(await getPledgesByGuest(guest.id))
+    } catch (e) {
+      alert('Error deleting pledge')
+    } finally {
+      setPledgesLoading(false)
+    }
+  }
+
+  const handleAddPayment = async () => {
+    if (!paymentPledge || !paymentAmount) return
+    setPaymentLoading(true)
+    try {
+      const paid = Number(paymentPledge.paid_amount || 0) + Number(paymentAmount)
+      await updatePledge(paymentPledge.id, { paid_amount: paid })
+      setPledges(await getPledgesByGuest(guest.id))
+      setShowPaymentModal(false)
+      setPaymentPledge(null)
+      setPaymentAmount('')
+    } catch (e) {
+      alert('Error recording payment')
+    } finally {
+      setPaymentLoading(false)
     }
   }
 
@@ -305,6 +380,70 @@ export const GuestDetail: React.FC = () => {
         </div>
       )}
 
+      {/* Pledges Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pledges</h3>
+            <button
+              onClick={() => { setEditingPledge(null); setShowPledgeModal(true) }}
+              className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-200"
+            >
+              <Plus className="w-4 h-4 mr-1" /> Add Pledge
+            </button>
+          </div>
+          {pledgesLoading ? (
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400"><Loader2 className="animate-spin w-4 h-4" /> Loading...</div>
+          ) : pledges.length === 0 ? (
+            <div className="text-gray-500 dark:text-gray-400">No pledges yet.</div>
+          ) : (
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {pledges.map(pledge => {
+                const paid = Number(pledge.paid_amount || 0)
+                const total = Number(pledge.amount)
+                const remaining = total - paid
+                return (
+                  <div key={pledge.id} className="py-3 flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">{pledge.type} - {total.toLocaleString()} TZS</div>
+                      <div className="flex gap-4 text-xs mt-1">
+                        <span className="text-gray-500 dark:text-gray-300">Pledge Amount: <span className="font-semibold text-gray-900 dark:text-white">{total.toLocaleString()} TZS</span></span>
+                        <span className="text-gray-500 dark:text-gray-300">Paid: <span className="font-semibold text-green-600">{paid.toLocaleString()} TZS</span></span>
+                        <span className="text-gray-500 dark:text-gray-300">Remaining: <span className={`font-semibold ${remaining > 0 ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}>{remaining.toLocaleString()} TZS</span></span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{pledge.status} {pledge.notes && <>| {pledge.notes}</>}</div>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={() => { setPaymentPledge(pledge); setShowPaymentModal(true) }}
+                        className="p-2 text-blue-500 hover:text-blue-700"
+                        title="Record Payment"
+                      >
+                        <MinusCircle className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => { setEditingPledge(pledge); setShowPledgeModal(true) }}
+                        className="p-2 text-blue-500 hover:text-blue-700"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handlePledgeDelete(pledge.id)}
+                        className="p-2 text-red-500 hover:text-red-700"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Edit Guest Modal */}
       <EditGuestModal
         guest={guest}
@@ -339,6 +478,59 @@ export const GuestDetail: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pledge Modal */}
+      {showPledgeModal && (
+        <PledgeModal
+          open={showPledgeModal}
+          onClose={() => { setShowPledgeModal(false); setEditingPledge(null) }}
+          onSave={handlePledgeSave}
+          initial={editingPledge}
+        />
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && paymentPledge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-lg border border-gray-200 dark:border-gray-700 relative">
+            <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={() => setShowPaymentModal(false)}>&times;</button>
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Record Payment</h2>
+            <div className="mb-2 text-gray-700 dark:text-gray-200">Pledge: <span className="font-semibold">{paymentPledge.type} - {Number(paymentPledge.amount).toLocaleString()} TZS</span></div>
+            <form onSubmit={e => { e.preventDefault(); handleAddPayment() }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Amount Paid (TZS)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={Number(paymentPledge.amount) - Number(paymentPledge.paid_amount || 0)}
+                  required
+                  className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+                  disabled={paymentLoading}
+                >
+                  {paymentLoading ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg"
+                  onClick={() => setShowPaymentModal(false)}
+                  disabled={paymentLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -504,6 +696,126 @@ const EditGuestModal: React.FC<{
             </div>
           </form>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Pledge Modal Component
+const PledgeModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onSave: (pledge: Partial<Pledge>) => void;
+  initial?: Pledge | null;
+}> = ({ open, onClose, onSave, initial }) => {
+  const [form, setForm] = useState({
+    amount: initial?.amount || '',
+    type: initial?.type || '',
+    notes: initial?.notes || '',
+    status: initial?.status || 'pending',
+  })
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (initial) {
+      setForm({
+        amount: initial.amount,
+        type: initial.type,
+        notes: initial.notes || '',
+        status: initial.status,
+      })
+    } else {
+      setForm({ amount: '', type: '', notes: '', status: 'pending' })
+    }
+  }, [initial])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await onSave({
+        ...form,
+        amount: Number(form.amount),
+      })
+      onClose()
+    } catch (e) {
+      alert('Error saving pledge')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-lg border border-gray-200 dark:border-gray-700 relative">
+        <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={onClose}>&times;</button>
+        <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{initial ? 'Edit Pledge' : 'Add Pledge'}</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Amount (TZS)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm font-medium">TZS</span>
+              <input
+                type="number"
+                min="0"
+                required
+                className="w-full py-2 pl-12 pr-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Type</label>
+            <input
+              type="text"
+              required
+              className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              value={form.type}
+              onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Status</label>
+            <select
+              className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              value={form.status}
+              onChange={e => setForm(f => ({ ...f, status: e.target.value as 'pending' | 'fulfilled' | 'cancelled' }))}
+            >
+              <option value="pending">Pending</option>
+              <option value="fulfilled">Fulfilled</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-200">Notes</label>
+            <textarea
+              className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              rows={2}
+            />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button
+              type="submit"
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+              disabled={loading}
+            >
+              {loading ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

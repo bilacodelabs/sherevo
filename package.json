@@ -10,6 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.18",
+    "@fullcalendar/daygrid": "^6.1.18",
+    "@fullcalendar/interaction": "^6.1.18",
+    "@fullcalendar/react": "^6.1.18",
+    "@fullcalendar/timegrid": "^6.1.18",
     "@supabase/supabase-js": "^2.38.0",
     "date-fns": "^2.30.0",
     "html2canvas": "^1.4.1",
@@ -17,6 +22,7 @@
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
+    "react-calendar": "^6.0.0",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.20.0",
     "supabase": "^2.30.4"

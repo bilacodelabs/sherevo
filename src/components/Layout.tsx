@@ -88,7 +88,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex h-16 items-center justify-between px-4 border-b dark:border-gray-700">
             <Link to="/dashboard" className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-orange-500 to-pink-500 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">N</span>
+                <span className="text-white font-bold text-sm">S</span>
               </div>
               <span className="text-xl font-bold text-gray-900 dark:text-white">Sherevo</span>
             </Link>
@@ -137,9 +137,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex h-16 items-center px-6 border-b dark:border-gray-700">
           <Link to="/dashboard" className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-orange-500 to-pink-500 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">N</span>
+              <span className="text-white font-bold text-sm">S</span>
             </div>
-            <span className="text-xl font-bold text-gray-900 dark:text-white">Nialike</span>
+            <span className="text-xl font-bold text-gray-900 dark:text-white">Sherevo</span>
           </Link>
         </div>
         <nav className="flex-1 px-4 py-4 space-y-2">

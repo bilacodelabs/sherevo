@@ -82,7 +82,7 @@ export const Login: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-r from-orange-500 to-pink-500 flex items-center justify-center mb-4">
-            <span className="text-white font-bold text-2xl">N</span>
+            <span className="text-white font-bold text-2xl">S</span>
           </div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
             {isSignUp ? 'Create Account' : 'Welcome Back'}

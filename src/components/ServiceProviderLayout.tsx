@@ -45,7 +45,7 @@ export const ServiceProviderLayout: React.FC<ServiceProviderLayoutProps> = ({ ch
             <Link to="/provider-dashboard" className="flex flex-col items-start space-y-1">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-orange-500 to-pink-500 flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">N</span>
+                  <span className="text-white font-bold text-sm">S</span>
                 </div>
                 <span className="text-xl font-bold text-gray-900 dark:text-white">Sherevo</span>
               </div>
@@ -96,7 +96,7 @@ export const ServiceProviderLayout: React.FC<ServiceProviderLayoutProps> = ({ ch
           <Link to="/provider-dashboard" className="flex flex-col items-start space-y-1">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-orange-500 to-pink-500 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">N</span>
+                <span className="text-white font-bold text-sm">S</span>
               </div>
               <span className="text-xl font-bold text-gray-900 dark:text-white">Nialike</span>
             </div>

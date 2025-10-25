@@ -775,7 +775,7 @@ const EventConfigurations: React.FC = () => {
                             })()}
                           </div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-2">Powered by Nialike App</div>
+                        <div className="text-xs text-gray-500 mt-2">Powered by Sherevo App</div>
                         <div className="absolute bottom-2 right-4 text-xs text-gray-400">8:59 PM</div>
                       </div>
                     </div>

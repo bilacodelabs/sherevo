@@ -646,7 +646,7 @@ ${mappingDetails}
           smsBody = smsBody.replace(/{{card_url}}/g, cardUrl);
           console.log('Rendered SMS body for', guest.name, ':', smsBody)
           // 3. Send SMS
-          const smsRes = await fetchWithTimeout('https://nialike-n8n.bilacodelabs.xyz/webhook/sms-invitation', {
+          const smsRes = await fetchWithTimeout('https://sherevo-n8n.bilacodelabs.xyz/webhook/sms-invitation', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

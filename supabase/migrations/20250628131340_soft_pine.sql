@@ -1,5 +1,5 @@
 /*
-  # Complete Nialike Platform Database Schema
+  # Complete Sherevo Platform Database Schema
 
   1. New Tables
     - `users` - User profiles with role-based access

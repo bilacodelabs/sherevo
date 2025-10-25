@@ -90,7 +90,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-orange-500 to-pink-500 flex items-center justify-center">
                 <span className="text-white font-bold text-sm">N</span>
               </div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">Nialike</span>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">Sherevo</span>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}

@@ -22,7 +22,7 @@ export const Login: React.FC = () => {
   const navigate = useNavigate()
 
   const demoCredentials = [
-    { email: 'admin@nialike.com', password: 'admin123', label: 'Admin Demo' },
+    { email: 'admin@sherevo.com', password: 'admin123', label: 'Admin Demo' },
     { email: 'customer@example.com', password: 'customer123', label: 'User Demo' },
     { email: 'mckizibo@gmail.com', password: '123456', label: 'Service Provider Demo' }
   ]
@@ -88,7 +88,7 @@ export const Login: React.FC = () => {
             {isSignUp ? 'Create Account' : 'Welcome Back'}
           </h2>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            {isSignUp ? 'Sign up for Nialike' : 'Sign in to your account'}
+            {isSignUp ? 'Sign up for Sherevo' : 'Sign in to your account'}
           </p>
         </div>
 

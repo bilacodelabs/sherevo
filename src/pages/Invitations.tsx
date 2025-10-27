@@ -678,7 +678,8 @@ ${mappingDetails}
           
           console.log('SMS API Credentials:', {
             smsApiKey,
-            smsApiSecret: smsApiSecret ? 'Set' : 'Missing',
+            smsApiSecretValue: smsApiSecret ? (smsApiSecret.substring(0, 10) + '...') : 'Missing',
+            smsApiSecretLength: smsApiSecret?.length || 0,
             senderId,
             fromEnv: !!import.meta.env.VITE_ADMIN_SMS_API_KEY,
             fromDatabase: !!userConfig?.sms_api_key
@@ -692,24 +693,22 @@ ${mappingDetails}
             deliveryReportUrl: ''
           }
           
+          const requestHeaders = {
+            'Content-Type': 'application/json',
+            'api_key': smsApiKey,
+            'api_secret': smsApiSecret
+          }
+          
           console.log('SMS Request Payload:', {
             url: 'https://messaging.kilakona.co.tz/api/v1/send-message',
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'api_key': smsApiKey,
-              'api_secret': '***hidden***'
-            },
+            headers: requestHeaders,
             body: smsPayload
           })
           
           const smsRes = await fetchWithTimeout('https://messaging.kilakona.co.tz/api/v1/send-message', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'api_key': smsApiKey,
-              'api_secret': smsApiSecret
-            },
+            headers: requestHeaders,
             body: JSON.stringify(smsPayload),
             timeout: 15000
           }) as Response

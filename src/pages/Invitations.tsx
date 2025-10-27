@@ -691,15 +691,30 @@ ${mappingDetails}
             }),
             timeout: 15000
           }) as Response
-          console.log('SMS API response for', guest.name, ':', smsRes)
+          console.log('SMS API response for', guest.name, 'Status:', smsRes.status)
           
-          const smsData = await smsRes.json()
-          console.log('SMS API response data for', guest.name, ':', smsData)
+          let smsData: any = null
+          try {
+            const responseText = await smsRes.text()
+            console.log('SMS API response text:', responseText)
+            
+            if (responseText) {
+              smsData = JSON.parse(responseText)
+              console.log('SMS API response data for', guest.name, ':', smsData)
+            }
+          } catch (parseError) {
+            console.error('Failed to parse SMS response:', parseError)
+            localResults.push(`SMS failed for ${guest.name} - Invalid response`)
+            await updateGuest(guest.id, {
+              sms_status: 'failed'
+            })
+            continue
+          }
           
           if (smsRes.ok) {
             // Extract message ID and status from response
-            const smsMessageId = smsData.messages?.[0]?.messageId || smsData.messageId || ''
-            const smsStatus = smsData.messages?.[0]?.status?.groupName || smsRes.statusText || 'sent'
+            const smsMessageId = smsData?.messages?.[0]?.messageId || smsData?.messageId || ''
+            const smsStatus = smsData?.messages?.[0]?.status?.groupName || smsRes.statusText || 'sent'
             
             localResults.push(`SMS sent to ${guest.name}`)
             await updateGuest(guest.id, { 
@@ -709,8 +724,16 @@ ${mappingDetails}
               sms_status: smsStatus
             })
           } else {
-            localResults.push(`SMS failed for ${guest.name}`)
-            console.error('SMS failed for', guest.name, 'Status:', smsRes.status, smsRes.statusText)
+            const errorMsg = smsData?.error?.message || smsData?.message || `HTTP ${smsRes.status}`
+            localResults.push(`SMS failed for ${guest.name}: ${errorMsg}`)
+            console.error('SMS failed for', guest.name, 'Status:', smsRes.status, 'Error:', errorMsg)
+            
+            // If it's a 403, suggest checking API credentials
+            if (smsRes.status === 403) {
+              console.error('403 Forbidden - Check your SMS API key and secret in .env file')
+              localResults.push('ERROR: Invalid SMS API credentials. Please check your API key and secret.')
+            }
+            
             // Store failed status
             await updateGuest(guest.id, {
               sms_status: 'failed'

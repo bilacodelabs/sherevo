@@ -480,6 +480,8 @@ const CreateGuestModal: React.FC<{
                     newCardCount = 2
                   } else if (newCardType === 'single') {
                     newCardCount = 1
+                  } else if (newCardType === 'multiple') {
+                    newCardCount = 3
                   }
                   setFormData(prev => ({ 
                     ...prev, 

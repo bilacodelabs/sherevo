@@ -102,30 +102,24 @@ const EventConfigurations: React.FC = () => {
       const timeoutId = setTimeout(() => {
         console.log('Config loading timeout - setting loading to false')
         setConfigLoading(false)
-      }, 5000) // 5 second timeout - reduced for better UX
+      }, 20000) // 20 second timeout for remote Supabase
       
       try {
-        // First test if Supabase is working
-        console.log('Testing Supabase connection...')
-        const { data: testData, error: testError } = await supabase
-          .from('events')
-          .select('id, name')
-          .eq('id', eventId)
-          .limit(1)
+        // Skip connection test and go straight to config query with timeout
+        console.log('Loading configuration from database...')
         
-        console.log('Supabase test result:', { testData, testError })
-        
-        if (testError) {
-          console.error('Supabase connection failed:', testError)
-          throw new Error('Database connection failed')
-        }
-        
-        const { data, error } = await supabase
+        const configQuery = supabase
           .from('event_message_configurations')
           .select('*')
           .eq('event_id', eventId)
           .eq('channel', activeTab)
-          .single()
+          .maybeSingle(); // Use maybeSingle to avoid errors when no config exists
+        
+        const queryTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Query timeout')), 20000)
+        );
+        
+        const { data, error } = await Promise.race([configQuery, queryTimeout]) as any;
         
         clearTimeout(timeoutId)
         console.log('Config query result:', { data, error })
@@ -156,8 +150,22 @@ const EventConfigurations: React.FC = () => {
   // Fetch WhatsApp templates
   useEffect(() => {
     const fetchTemplates = async () => {
+      console.log('Effective config for templates:', {
+        hasApiKey: !!effectiveConfig?.whatsapp_api_key,
+        hasBusinessAccountId: !!effectiveConfig?.whatsapp_business_account_id,
+        useCustomConfig: effectiveConfig?.use_custom_config,
+        fullConfig: effectiveConfig
+      });
+      
+      console.log('Full effectiveConfig object:', JSON.stringify(effectiveConfig, null, 2));
+      
       if (!effectiveConfig?.whatsapp_api_key || !effectiveConfig?.whatsapp_business_account_id) {
         setWaError('WhatsApp API Key or Business Account ID not configured.');
+        console.error('Missing WhatsApp config:', {
+          hasApiKey: !!effectiveConfig?.whatsapp_api_key,
+          hasBusinessAccountId: !!effectiveConfig?.whatsapp_business_account_id,
+          effectiveConfig
+        });
         return;
       }
       setWaLoading(true)
@@ -361,57 +369,64 @@ const EventConfigurations: React.FC = () => {
     try {
       console.log('About to call Supabase upsert...');
       
-      // First check if user is authenticated
-      console.log('Checking authentication...');
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      console.log('Auth check result:', { user: user?.id, error: authError });
+      // Skip auth check - user must be authenticated to access this page anyway
+      console.log('Proceeding to insert configuration...');
       
-      if (authError || !user) {
-        alert('Authentication error: ' + (authError?.message || 'Not logged in') + '\n\nPlease refresh the page and log in again.');
-        setSaving(false);
-        return;
-      }
-      
-      console.log('User authenticated:', user.id);
-      console.log('Proceeding to insert...');
-      
-      // Add timeout to prevent hanging (longer for remote Supabase)
+      // Add timeout to prevent hanging (longer for remote Supabase with RLS)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Insert timeout after 30 seconds. This might be due to network latency with remote Supabase.')), 30000)
+        setTimeout(() => reject(new Error('Insert timeout after 60 seconds. This might be due to RLS policy evaluation or network latency with remote Supabase.')), 60000)
       );
       
       // Try insert first, if it fails due to conflict, then try update
       console.log('8. Attempting insert into event_message_configurations...');
-      const insertPromise = supabase
-        .from('event_message_configurations')
-        .insert([
-          {
-            event_id: eventId,
-            channel: 'whatsapp',
-            template_name: selectedTemplate,
-            template_language: template.language,
-            variable_mapping: mapping,
-            updated_at: new Date().toISOString(),
-          }
-        ]);
+      console.log('8a. Event ID:', eventId, 'Template:', selectedTemplate);
       
-      let { data, error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+      let insertPromise, updatePromise, data, error;
+      
+      try {
+        insertPromise = supabase
+          .from('event_message_configurations')
+          .insert([
+            {
+              event_id: eventId,
+              channel: 'whatsapp',
+              template_name: selectedTemplate,
+              template_language: template.language,
+              variable_mapping: mapping,
+              updated_at: new Date().toISOString(),
+            }
+          ]);
+        
+        console.log('8b. Created insert promise, starting with timeout...');
+        ({ data, error } = await Promise.race([insertPromise, timeoutPromise]) as any);
+        console.log('8c. Insert completed with result:', { data, error });
+      } catch (insertErr) {
+        console.error('8d. Insert threw error:', insertErr);
+        throw insertErr;
+      }
       
       // If insert fails due to unique constraint violation, try update
       if (error && error.code === '23505') { // Unique violation error code
-        console.log('Insert failed due to existing record, trying update...');
-        const updatePromise = supabase
-          .from('event_message_configurations')
-          .update({
-            template_name: selectedTemplate,
-            template_language: template.language,
-            variable_mapping: mapping,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('event_id', eventId)
-          .eq('channel', 'whatsapp');
-        
-        ({ data, error } = await Promise.race([updatePromise, timeoutPromise]) as any);
+        console.log('9. Insert failed due to existing record, trying update...');
+        try {
+          updatePromise = supabase
+            .from('event_message_configurations')
+            .update({
+              template_name: selectedTemplate,
+              template_language: template.language,
+              variable_mapping: mapping,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('event_id', eventId)
+            .eq('channel', 'whatsapp');
+          
+          console.log('9a. Created update promise, starting with timeout...');
+          ({ data, error } = await Promise.race([updatePromise, timeoutPromise]) as any);
+          console.log('9b. Update completed with result:', { data, error });
+        } catch (updateErr) {
+          console.error('9c. Update threw error:', updateErr);
+          throw updateErr;
+        }
       }
       
       console.log('Supabase response:', { data, error });

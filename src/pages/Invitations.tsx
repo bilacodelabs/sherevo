@@ -751,8 +751,13 @@ ${mappingDetails}
             
             // If it's a 403, suggest checking API credentials
             if (smsRes.status === 403) {
-              console.error('403 Forbidden - Check your SMS API key and secret in .env file')
-              localResults.push('ERROR: Invalid SMS API credentials. Please check your API key and secret.')
+              console.error('403 Forbidden - Invalid API credentials')
+              console.error('The credentials being used:', {
+                api_key: smsApiKey,
+                api_secret_length: smsApiSecret?.length,
+                senderId: senderId
+              })
+              localResults.push(`ERROR: SMS API rejected credentials (403 Forbidden). Please verify your Kilakona API credentials are correct and activated.`)
             }
             
             // Store failed status

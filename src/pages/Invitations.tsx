@@ -684,6 +684,25 @@ ${mappingDetails}
             fromDatabase: !!userConfig?.sms_api_key
           })
           
+          const smsPayload = {
+            senderId: senderId,
+            messageType: 'text',
+            message: smsBody,
+            contacts: guest.phone,
+            deliveryReportUrl: ''
+          }
+          
+          console.log('SMS Request Payload:', {
+            url: 'https://messaging.kilakona.co.tz/api/v1/send-message',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'api_key': smsApiKey,
+              'api_secret': '***hidden***'
+            },
+            body: smsPayload
+          })
+          
           const smsRes = await fetchWithTimeout('https://messaging.kilakona.co.tz/api/v1/send-message', {
             method: 'POST',
             headers: {
@@ -691,13 +710,7 @@ ${mappingDetails}
               'api_key': smsApiKey,
               'api_secret': smsApiSecret
             },
-            body: JSON.stringify({
-              senderId: senderId,
-              messageType: 'text',
-              message: smsBody,
-              contacts: guest.phone,
-              deliveryReportUrl: '' // Optional: Add webhook URL for delivery reports
-            }),
+            body: JSON.stringify(smsPayload),
             timeout: 15000
           }) as Response
           console.log('SMS API response for', guest.name, 'Status:', smsRes.status)

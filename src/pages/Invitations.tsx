@@ -670,18 +670,24 @@ ${mappingDetails}
           const cardUrl = guest.card_url || '';
           smsBody = smsBody.replace(/{{card_url}}/g, cardUrl);
           console.log('Rendered SMS body for', guest.name, ':', smsBody)
-          // 3. Send SMS
-          const smsRes = await fetchWithTimeout('https://sherevo-n8n.bilacodelabs.xyz/webhook/sms-invitation', {
+          // 3. Send SMS using Kilakona API
+          const smsApiKey = userConfig?.sms_api_key || import.meta.env.VITE_ADMIN_SMS_API_KEY
+          const smsApiSecret = userConfig?.sms_api_secret || import.meta.env.VITE_ADMIN_SMS_API_SECRET
+          const senderId = userConfig?.sms_sender_id || import.meta.env.VITE_ADMIN_SMS_SENDER_ID
+          
+          const smsRes = await fetchWithTimeout('https://messaging.kilakona.co.tz/api/v1/send-message', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Accept': 'application/json'
+              'api_key': smsApiKey,
+              'api_secret': smsApiSecret
             },
             body: JSON.stringify({
-              from: import.meta.env.VITE_ADMIN_SMS_SENDER_ID,
-              to: guest.phone,
-              text: smsBody,
-              reference: guest.id
+              senderId: senderId,
+              messageType: 'text',
+              message: smsBody,
+              contacts: guest.phone,
+              deliveryReportUrl: '' // Optional: Add webhook URL for delivery reports
             }),
             timeout: 15000
           }) as Response

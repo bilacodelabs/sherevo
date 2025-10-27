@@ -167,8 +167,10 @@ export interface UserConfiguration {
   whatsapp_business_account_id: string
   whatsapp_enabled: boolean
   sms_api_key: string
+  sms_api_secret: string
   sms_provider: string
   sms_phone_number: string
+  sms_sender_id: string
   sms_enabled: boolean
   email_notifications: boolean
   push_notifications: boolean

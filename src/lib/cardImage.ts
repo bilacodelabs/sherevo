@@ -111,7 +111,7 @@ export async function generateCardImageForGuest(
   // Use very high scale for crisp text rendering
   const canvas = await html2canvas(dom, {
     useCORS: true,
-    scale: 4,
+    scale: 10,
     logging: false,
     backgroundColor: '#ffffff',
     allowTaint: true,

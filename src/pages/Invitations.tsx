@@ -658,7 +658,7 @@ ${mappingDetails}
           smsBody = smsBody
             .replace(/{{guest_name}}/g, guest.name)
             .replace(/{{event_name}}/g, selectedEventData.name)
-            .replace(/{{event_date}}/g, selectedEventData.date)
+            .replace(/{{event_date}}/g, new Date(selectedEventData.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
             .replace(/{{event_time}}/g, selectedEventData.time || '')
             .replace(/{{event_venue}}/g, selectedEventData.venue || '')
             .replace(/{{plus_one_name}}/g, guest.plus_one_name || '')
@@ -824,7 +824,7 @@ ${mappingDetails}
                 paramValue = selectedEventData.name;
                 break;
               case 'event_date':
-                paramValue = new Date(selectedEventData.date).toLocaleDateString();
+                paramValue = new Date(selectedEventData.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 break;
               case 'event_time':
                 paramValue = selectedEventData.time || '';

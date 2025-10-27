@@ -12,6 +12,7 @@ const ADMIN_CONFIG = {
   sms_provider: import.meta.env.VITE_ADMIN_SMS_PROVIDER || 'kilakona',
   sms_phone_number: import.meta.env.VITE_ADMIN_SMS_PHONE_NUMBER || '',
   sms_sender_id: import.meta.env.VITE_ADMIN_SMS_SENDER_ID || '',
+  sms_webhook_url: import.meta.env.VITE_ADMIN_SMS_WEBHOOK_URL || '',
   sms_enabled: import.meta.env.VITE_ADMIN_SMS_ENABLED === 'true',
   email_notifications: true,
   push_notifications: false,

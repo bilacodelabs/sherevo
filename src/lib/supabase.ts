@@ -171,6 +171,7 @@ export interface UserConfiguration {
   sms_provider: string
   sms_phone_number: string
   sms_sender_id: string
+  sms_webhook_url: string
   sms_enabled: boolean
   email_notifications: boolean
   push_notifications: boolean

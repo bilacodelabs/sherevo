@@ -675,6 +675,13 @@ ${mappingDetails}
           const smsApiSecret = userConfig?.sms_api_secret || import.meta.env.VITE_ADMIN_SMS_API_SECRET
           const senderId = userConfig?.sms_sender_id || import.meta.env.VITE_ADMIN_SMS_SENDER_ID
           
+          console.log('SMS API Credentials:', {
+            smsApiKey,
+            smsApiSecret: smsApiSecret ? 'Set' : 'Missing',
+            senderId,
+            fromUserConfig: !!userConfig?.sms_api_key
+          })
+          
           const smsRes = await fetchWithTimeout('https://messaging.kilakona.co.tz/api/v1/send-message', {
             method: 'POST',
             headers: {

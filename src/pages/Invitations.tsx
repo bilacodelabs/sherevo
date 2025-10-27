@@ -671,15 +671,17 @@ ${mappingDetails}
           smsBody = smsBody.replace(/{{card_url}}/g, cardUrl);
           console.log('Rendered SMS body for', guest.name, ':', smsBody)
           // 3. Send SMS using Kilakona API
-          const smsApiKey = userConfig?.sms_api_key || import.meta.env.VITE_ADMIN_SMS_API_KEY
-          const smsApiSecret = userConfig?.sms_api_secret || import.meta.env.VITE_ADMIN_SMS_API_SECRET
-          const senderId = userConfig?.sms_sender_id || import.meta.env.VITE_ADMIN_SMS_SENDER_ID
+          // Use environment variables first for admin config
+          const smsApiKey = import.meta.env.VITE_ADMIN_SMS_API_KEY || userConfig?.sms_api_key
+          const smsApiSecret = import.meta.env.VITE_ADMIN_SMS_API_SECRET || userConfig?.sms_api_secret
+          const senderId = import.meta.env.VITE_ADMIN_SMS_SENDER_ID || userConfig?.sms_sender_id
           
           console.log('SMS API Credentials:', {
             smsApiKey,
             smsApiSecret: smsApiSecret ? 'Set' : 'Missing',
             senderId,
-            fromUserConfig: !!userConfig?.sms_api_key
+            fromEnv: !!import.meta.env.VITE_ADMIN_SMS_API_KEY,
+            fromDatabase: !!userConfig?.sms_api_key
           })
           
           const smsRes = await fetchWithTimeout('https://messaging.kilakona.co.tz/api/v1/send-message', {

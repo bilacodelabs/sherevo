@@ -108,22 +108,14 @@ export async function generateCardImageForGuest(
   
   const dom = await renderCardDOM(cardDesign, guest, event, eventAttributes);
   
-  // Calculate scale factor for high quality (3x for very high quality)
-  const scale = 3;
-  
-  // Calculate actual dimensions with scale
-  const width = cardDesign.canvas_width * scale;
-  const height = cardDesign.canvas_height * scale;
-  
+  // Use high scale for quality without setting explicit dimensions
   const canvas = await html2canvas(dom, {
     useCORS: true,
-    scale: scale,
-    width: width,
-    height: height,
+    scale: 3,
     logging: false,
     backgroundColor: '#ffffff',
     allowTaint: true,
-    foreignObjectRendering: true
+    foreignObjectRendering: false
   });
   
   // Export at highest quality

@@ -670,45 +670,32 @@ ${mappingDetails}
           const cardUrl = guest.card_url || '';
           smsBody = smsBody.replace(/{{card_url}}/g, cardUrl);
           console.log('Rendered SMS body for', guest.name, ':', smsBody)
-          // 3. Send SMS using Kilakona API
-          // Use environment variables first for admin config
-          const smsApiKey = import.meta.env.VITE_ADMIN_SMS_API_KEY || userConfig?.sms_api_key
-          const smsApiSecret = import.meta.env.VITE_ADMIN_SMS_API_SECRET || userConfig?.sms_api_secret
-          const senderId = import.meta.env.VITE_ADMIN_SMS_SENDER_ID || userConfig?.sms_sender_id
+          // 3. Send SMS via n8n webhook
+          // Commented out direct Kilakona API call:
+          // const smsApiKey = import.meta.env.VITE_ADMIN_SMS_API_KEY || userConfig?.sms_api_key
+          // const smsApiSecret = import.meta.env.VITE_ADMIN_SMS_API_SECRET || userConfig?.sms_api_secret
+          // const senderId = import.meta.env.VITE_ADMIN_SMS_SENDER_ID || userConfig?.sms_sender_id
           
-          console.log('SMS API Credentials:', {
-            smsApiKey,
-            smsApiSecretValue: smsApiSecret ? (smsApiSecret.substring(0, 10) + '...') : 'Missing',
-            smsApiSecretLength: smsApiSecret?.length || 0,
-            senderId,
-            fromEnv: !!import.meta.env.VITE_ADMIN_SMS_API_KEY,
-            fromDatabase: !!userConfig?.sms_api_key
-          })
+          console.log('Sending SMS via n8n webhook for', guest.name)
           
           const smsPayload = {
-            senderId: senderId,
-            messageType: 'text',
+            phone: guest.phone,
             message: smsBody,
-            contacts: guest.phone,
-            deliveryReportUrl: ''
-          }
-          
-          const requestHeaders = {
-            'Content-Type': 'application/json',
-            'api_key': smsApiKey,
-            'api_secret': smsApiSecret
+            guestId: guest.id,
+            guestName: guest.name
           }
           
           console.log('SMS Request Payload:', {
-            url: 'https://messaging.kilakona.co.tz/api/v1/send-message',
+            url: 'https://balki-n8n.bilacodelabs.xyz/webhook/sherevo-sms-invitation',
             method: 'POST',
-            headers: requestHeaders,
             body: smsPayload
           })
           
-          const smsRes = await fetchWithTimeout('https://messaging.kilakona.co.tz/api/v1/send-message', {
+          const smsRes = await fetchWithTimeout('https://balki-n8n.bilacodelabs.xyz/webhook/sherevo-sms-invitation', {
             method: 'POST',
-            headers: requestHeaders,
+            headers: {
+              'Content-Type': 'application/json'
+            },
             body: JSON.stringify(smsPayload),
             timeout: 15000
           }) as Response

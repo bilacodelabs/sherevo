@@ -78,6 +78,8 @@ export interface Guest {
   sms_status?: string
   whatsapp_message_status?: string
   whatsapp_response?: any
+  card_type?: 'single' | 'double' | 'multiple'
+  card_count?: number
 }
 
 export interface GuestCategory {

@@ -330,7 +330,9 @@ const CreateGuestModal: React.FC<{
     event_id: preselectedEventId,
     category: 'General',
     plus_one_allowed: false,
-    dietary_restrictions: ''
+    dietary_restrictions: '',
+    card_type: 'single' as 'single' | 'double' | 'multiple',
+    card_count: 1
   })
 
   const categories = ['General', 'Family', 'Friends', 'Colleagues', 'VIP']
@@ -346,13 +348,22 @@ const CreateGuestModal: React.FC<{
     setLoading(true)
 
     try {
+      // Calculate card_count based on card_type
+      let finalCardCount = 1
+      if (formData.card_type === 'double') {
+        finalCardCount = 2
+      } else if (formData.card_type === 'multiple') {
+        finalCardCount = formData.card_count
+      }
+
       await createGuest({
         ...formData,
         rsvp_status: 'pending',
         invitation_sent: false,
         qr_code: '',
         delivery_status: 'not_sent',
-        plus_one_name: ''
+        plus_one_name: '',
+        card_count: finalCardCount
       })
       onClose()
       setFormData({
@@ -362,10 +373,13 @@ const CreateGuestModal: React.FC<{
         event_id: preselectedEventId,
         category: 'General',
         plus_one_allowed: false,
-        dietary_restrictions: ''
+        dietary_restrictions: '',
+        card_type: 'single',
+        card_count: 1
       })
     } catch (error) {
       console.error('Error creating guest:', error)
+      alert('Failed to create guest: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setLoading(false)
     }
@@ -452,6 +466,53 @@ const CreateGuestModal: React.FC<{
                 ))}
               </select>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Card Type
+              </label>
+              <select
+                value={formData.card_type}
+                onChange={(e) => {
+                  const newCardType = e.target.value as 'single' | 'double' | 'multiple'
+                  let newCardCount = 1
+                  if (newCardType === 'double') {
+                    newCardCount = 2
+                  } else if (newCardType === 'single') {
+                    newCardCount = 1
+                  }
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    card_type: newCardType,
+                    card_count: newCardCount
+                  }))
+                }}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+              >
+                <option value="single">Single (1 card)</option>
+                <option value="double">Double (2 cards)</option>
+                <option value="multiple">Multiple</option>
+              </select>
+            </div>
+
+            {formData.card_type === 'multiple' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Card Count
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.card_count}
+                  onChange={(e) => {
+                    const count = parseInt(e.target.value) || 1
+                    setFormData(prev => ({ ...prev, card_count: count }))
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  required
+                />
+              </div>
+            )}
 
             <div className="flex items-center">
               <input

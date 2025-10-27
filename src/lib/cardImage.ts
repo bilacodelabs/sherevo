@@ -11,7 +11,7 @@ export function fillCardVariables(text: string, guest: any, event: any, eventAtt
     .replace(/\{\{event_time\}\}/g, event.time)
     .replace(/\{\{event_venue\}\}/g, event.venue)
     .replace(/\{\{plus_one_name\}\}/g, guest.plus_one_name || "")
-    .replace(/\{\{card_type\}\}/g, event.type)
+    .replace(/\{\{card_type\}\}/g, guest.card_type || "")
     .replace(/\{\{qr_code\}\}/g, guest.id);
 
   // Replace event attribute variables

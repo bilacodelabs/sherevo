@@ -322,6 +322,9 @@ ${mappingDetails}
           case 'plus_one_name':
             paramValue = guest.plus_one_name || ''
             break
+          case 'card_type':
+            paramValue = (guest as any).card_type || ''
+            break
           case 'card_url':
             paramValue = cardImageUrl || ''
             paramType = 'image'
@@ -834,6 +837,9 @@ ${mappingDetails}
                 break;
               case 'plus_one_name':
                 paramValue = guest.plus_one_name || '';
+                break;
+              case 'card_type':
+                paramValue = (guest as any).card_type || '';
                 break;
               case 'card_url':
                 paramValue = cardImageUrl || '';

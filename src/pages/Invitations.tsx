@@ -280,16 +280,19 @@ ${mappingDetails}
     templateConfig: any
   ): Promise<{ success: boolean; message: string }> => {
     try {
+      console.log('[sendWhatsApp] Starting, guest:', guest.name, 'event:', event.name);
       // Format phone number
       let formattedPhone = guest.phone.replace(/^\+/, '').replace(/\s/g, '')
       if (!formattedPhone.startsWith('1') && formattedPhone.length === 10) {
         formattedPhone = '1' + formattedPhone
       }
 
-      console.log('Sending WhatsApp to:', formattedPhone, 'with template:', templateConfig.template_name)
+      console.log('[sendWhatsApp] Sending WhatsApp to:', formattedPhone, 'with template:', templateConfig.template_name)
 
+      console.log('[sendWhatsApp] Variable mapping from config:', templateConfig.variable_mapping);
       // Prepare template parameters based on variable mapping
       const templateParams = Object.entries(templateConfig.variable_mapping || {}).map(([key, value]) => {
+        console.log('[sendWhatsApp] Processing template param:', key, '=', value);
         let paramValue = ''
         let paramType = 'text'
         
@@ -355,9 +358,10 @@ ${mappingDetails}
         }
       })
 
-      console.log('Generated template parameters:', templateParams.length, 'parameters')
-      console.log('Template parameters:', templateParams)
+      console.log('[sendWhatsApp] Generated template parameters:', templateParams.length, 'parameters')
+      console.log('[sendWhatsApp] Template parameters:', templateParams)
 
+      console.log('[sendWhatsApp] Building message payload...');
       // Build the message payload
       const messagePayload: any = {
         messaging_product: 'whatsapp',
@@ -417,7 +421,8 @@ ${mappingDetails}
         })
       }
 
-      console.log('Sending WhatsApp message with payload:', JSON.stringify(messagePayload, null, 2))
+      console.log('[sendWhatsApp] Sending WhatsApp message with payload:', JSON.stringify(messagePayload, null, 2))
+      console.log('[sendWhatsApp] Making fetch request to WhatsApp API...');
 
       const waRes = await fetch(`https://graph.facebook.com/v18.0/${userConfig?.whatsapp_phone_number_id}/messages`, {
         method: 'POST',
@@ -428,10 +433,24 @@ ${mappingDetails}
         body: JSON.stringify(messagePayload),
       })
 
+      console.log('[sendWhatsApp] Got response from API, status:', waRes.status);
       const waData = await waRes.json()
-      console.log('WhatsApp API Response:', waData)
+      console.log('[sendWhatsApp] WhatsApp API Response:', waData)
 
       if (waRes.ok) {
+        // Extract message ID and status from response
+        const messageId = waData.messages?.[0]?.id || ''
+        const messageStatus = waData.messages?.[0]?.message_status || 'accepted'
+        
+        // Store WhatsApp details in the guest record
+        await updateGuest(guest.id, {
+          whatsapp_message_id: messageId,
+          whatsapp_message_status: messageStatus,
+          whatsapp_response: waData,
+          delivery_status: 'sent',
+          invited_at: new Date().toISOString()
+        })
+        
         return { 
           success: true, 
           message: `WhatsApp sent to ${guest.name} (${formattedPhone})${cardImageUrl ? ' with card image' : ''}` 
@@ -439,6 +458,12 @@ ${mappingDetails}
       } else {
         const errorMsg = waData.error?.message || 'Unknown error'
         console.error('WhatsApp API Error:', waData.error)
+        
+        // Store error details in the guest record
+        await updateGuest(guest.id, {
+          whatsapp_message_status: 'failed',
+          whatsapp_response: waData
+        })
         
         // Handle parameter mismatch error
         if (waData.error?.code === 132000) {
@@ -661,15 +686,29 @@ ${mappingDetails}
             timeout: 15000
           }) as Response
           console.log('SMS API response for', guest.name, ':', smsRes)
+          
+          const smsData = await smsRes.json()
+          console.log('SMS API response data for', guest.name, ':', smsData)
+          
           if (smsRes.ok) {
+            // Extract message ID and status from response
+            const smsMessageId = smsData.messages?.[0]?.messageId || smsData.messageId || ''
+            const smsStatus = smsData.messages?.[0]?.status?.groupName || smsRes.statusText || 'sent'
+            
             localResults.push(`SMS sent to ${guest.name}`)
             await updateGuest(guest.id, { 
               delivery_status: 'sent',
-              invited_at: new Date().toISOString()
+              invited_at: new Date().toISOString(),
+              sms_message_id: smsMessageId,
+              sms_status: smsStatus
             })
           } else {
             localResults.push(`SMS failed for ${guest.name}`)
             console.error('SMS failed for', guest.name, 'Status:', smsRes.status, smsRes.statusText)
+            // Store failed status
+            await updateGuest(guest.id, {
+              sms_status: 'failed'
+            })
           }
         } catch (err) {
           localResults.push(`SMS error for ${guest.name}`)
@@ -682,22 +721,53 @@ ${mappingDetails}
       if (sendViaWhatsApp && userConfig?.whatsapp_enabled && userConfig.whatsapp_api_key && userConfig.whatsapp_phone_number_id && selectedEventData) {
         console.log('Attempting WhatsApp send for', guest.name);
         try {
-          // Get event message configuration
-          const { data: eventConfig, error: configError } = await supabase
-            .from('event_message_configurations')
-            .select('*')
-            .eq('event_id', selectedEvent)
-            .eq('channel', 'whatsapp')
-            .single();
-          if (configError || !eventConfig) {
-            console.log('No WhatsApp template config found for', guest.name);
-            localResults.push(`WhatsApp failed for ${guest.name}: No template configuration found`);
-            continue;
+          console.log('Step 1: Fetching event message configuration...');
+          console.log('Event ID:', selectedEvent);
+          // Get event message configuration with timeout
+          let eventConfig, configError;
+          try {
+            const queryPromise = supabase
+              .from('event_message_configurations')
+              .select('*')
+              .eq('event_id', selectedEvent)
+              .eq('channel', 'whatsapp')
+              .maybeSingle();
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Query timeout after 20 seconds. Network latency detected with remote Supabase.')), 20000)
+            );
+            
+            const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+            
+            eventConfig = result.data;
+            configError = result.error;
+            
+            // If no error but also no data, log it
+            if (!configError && !eventConfig) {
+              console.log('No configuration found (no rows returned)');
+            }
+          } catch (err) {
+            console.error('Database query error or timeout:', err);
+            configError = err;
+            eventConfig = null;
           }
+          console.log('Step 2: Got event config, error:', configError, 'data:', eventConfig);
+          if (configError || !eventConfig) {
+            console.error('No WhatsApp template config found for', guest.name, 'Error:', configError);
+            const errorMsg = (configError as any)?.message || 'No template configuration found';
+            alert(`WhatsApp Configuration Missing!\n\nThis event doesn't have a WhatsApp template configured.\n\nPlease go to Event Configurations and set up a WhatsApp template for this event.\n\nError: ${errorMsg}`);
+            localResults.push(`WhatsApp failed for ${guest.name}: ${errorMsg}`);
+            setIsSending(false);
+            setCurrentGuest(null);
+            return;
+          }
+          console.log('Step 3: Using persisted card_url:', guest.card_url);
           // Use persisted card_url
           const cardImageUrl = guest.card_url || '';
           // Prepare template parameters based on variable mapping
+          console.log('Step 4: Getting event attributes...');
           const eventAttributes = getEventAttributes(selectedEventData.id);
+          console.log('Step 5: Got event attributes, building template params...');
           const templateParams = Object.entries(eventConfig.variable_mapping || {}).map(([key, value]) => {
             let paramValue = '';
             let paramType = 'text';
@@ -761,14 +831,14 @@ ${mappingDetails}
               };
             }
           });
+          console.log('Step 6: Built template params, count:', templateParams.length);
           // Send WhatsApp message with card image
+          console.log('Step 7: Calling sendWhatsAppWithCardImage...');
           const waResult = await sendWhatsAppWithCardImage(guest, selectedEventData, cardImageUrl, eventConfig);
+          console.log('Step 8: Got result from sendWhatsAppWithCardImage:', waResult);
           if (waResult.success) {
             localResults.push(waResult.message);
-            await updateGuest(guest.id, { 
-              delivery_status: 'sent',
-              invited_at: new Date().toISOString()
-            });
+            // Note: Guest update (delivery_status, whatsapp_message_id, etc.) is already handled in sendWhatsAppWithCardImage
           } else {
             localResults.push(waResult.message);
             console.error('WhatsApp sending error:', waResult.message);

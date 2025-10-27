@@ -60,6 +60,15 @@ CREATE POLICY "Event owners can manage pledges for their events" ON pledges FOR 
   EXISTS (SELECT 1 FROM events WHERE id = pledges.event_id AND user_id = uid())
 );
 
--- Insert a test service provider
-INSERT INTO users (id, email, name, role)
-VALUES (gen_random_uuid(), 'test@example.com', 'Test Provider', 'service_provider'); 
+-- Allow 'service_provider' as a valid user role (if not already updated)
+DO $$
+BEGIN
+  ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+  ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer', 'super_admin', 'service_provider'));
+EXCEPTION
+  WHEN OTHERS THEN
+    NULL;
+END $$;
+
+-- Skip test user insert - this will be created via auth signup
+-- Note: To create a service provider user, they must sign up via auth first 

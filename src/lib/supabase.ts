@@ -73,6 +73,11 @@ export interface Guest {
   created_at: string
   updated_at: string
   card_url?: string
+  sms_message_id?: string
+  whatsapp_message_id?: string
+  sms_status?: string
+  whatsapp_message_status?: string
+  whatsapp_response?: any
 }
 
 export interface GuestCategory {

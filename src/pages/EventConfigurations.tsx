@@ -361,29 +361,27 @@ const EventConfigurations: React.FC = () => {
     try {
       console.log('About to call Supabase upsert...');
       
-      // First, let's test if Supabase is working at all
-      console.log('Testing Supabase connection...');
-      const { data: testData, error: testError } = await supabase
-        .from('events')
-        .select('id, name')
-        .eq('id', eventId)
-        .limit(1);
+      // First check if user is authenticated
+      console.log('Checking authentication...');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      console.log('Auth check result:', { user: user?.id, error: authError });
       
-      console.log('Supabase connection test:', { testData, testError });
-      
-      if (testError) {
-        console.error('Supabase connection failed:', testError);
-        alert('Database connection failed. Please check your internet connection.');
+      if (authError || !user) {
+        alert('Authentication error: ' + (authError?.message || 'Not logged in') + '\n\nPlease refresh the page and log in again.');
+        setSaving(false);
         return;
       }
       
-      // Add timeout to prevent hanging
+      console.log('User authenticated:', user.id);
+      console.log('Proceeding to insert...');
+      
+      // Add timeout to prevent hanging (longer for remote Supabase)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
+        setTimeout(() => reject(new Error('Insert timeout after 30 seconds. This might be due to network latency with remote Supabase.')), 30000)
       );
       
       // Try insert first, if it fails due to conflict, then try update
-      console.log('Attempting insert...');
+      console.log('8. Attempting insert into event_message_configurations...');
       const insertPromise = supabase
         .from('event_message_configurations')
         .insert([

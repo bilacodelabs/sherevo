@@ -108,14 +108,17 @@ export async function generateCardImageForGuest(
   
   const dom = await renderCardDOM(cardDesign, guest, event, eventAttributes);
   
-  // Use high scale for quality without setting explicit dimensions
+  // Use very high scale for crisp text rendering
   const canvas = await html2canvas(dom, {
     useCORS: true,
-    scale: 3,
+    scale: 4,
     logging: false,
     backgroundColor: '#ffffff',
     allowTaint: true,
-    foreignObjectRendering: false
+    foreignObjectRendering: false,
+    letterRendering: true,
+    imageTimeout: 15000,
+    removeContainer: true
   });
   
   // Export at highest quality

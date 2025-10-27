@@ -720,32 +720,26 @@ ${mappingDetails}
           }
           
           if (smsRes.ok) {
-            // Extract message ID and status from response
-            const smsMessageId = smsData?.messages?.[0]?.messageId || smsData?.messageId || ''
-            const smsStatus = smsData?.messages?.[0]?.status?.groupName || smsRes.statusText || 'sent'
+            // Parse the response array - n8n returns [{}] format
+            const responseItem = Array.isArray(smsData) ? smsData[0] : smsData
+            
+            // Extract shootId and status message from n8n response
+            const shootId = responseItem?.data?.shootId || ''
+            const statusMessage = responseItem?.message || responseItem?.data?.message || 'sent'
+            
+            console.log('Extracted SMS tracking info:', { shootId, statusMessage })
             
             localResults.push(`SMS sent to ${guest.name}`)
             await updateGuest(guest.id, { 
               delivery_status: 'sent',
               invited_at: new Date().toISOString(),
-              sms_message_id: smsMessageId,
-              sms_status: smsStatus
+              sms_message_id: shootId,
+              sms_status: statusMessage
             })
           } else {
             const errorMsg = smsData?.error?.message || smsData?.message || `HTTP ${smsRes.status}`
             localResults.push(`SMS failed for ${guest.name}: ${errorMsg}`)
             console.error('SMS failed for', guest.name, 'Status:', smsRes.status, 'Error:', errorMsg)
-            
-            // If it's a 403, suggest checking API credentials
-            if (smsRes.status === 403) {
-              console.error('403 Forbidden - Invalid API credentials')
-              console.error('The credentials being used:', {
-                api_key: smsApiKey,
-                api_secret_length: smsApiSecret?.length,
-                senderId: senderId
-              })
-              localResults.push(`ERROR: SMS API rejected credentials (403 Forbidden). Please verify your Kilakona API credentials are correct and activated.`)
-            }
             
             // Store failed status
             await updateGuest(guest.id, {

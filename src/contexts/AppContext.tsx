@@ -522,31 +522,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setEventSmsConfig = async (eventId: string, purpose: 'reminder' | 'invitation', smsTemplateId: string) => {
     console.log('Setting SMS config:', { eventId, purpose, smsTemplateId })
     
-    // Add timeout to prevent hanging
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('SMS config update timeout after 30 seconds')), 30000)
-    )
-    
     try {
-      // Upsert config with timeout
-      const upsertPromise = supabase
+      // Direct upsert without race/timeout to see actual errors
+      console.log('Calling Supabase upsert for event_sms_configurations...')
+      
+      const { data, error } = await supabase
         .from('event_sms_configurations')
         .upsert([{ event_id: eventId, purpose, sms_template_id: smsTemplateId }], { onConflict: 'event_id,purpose' })
         .select()
         .single()
       
-      const result = await Promise.race([upsertPromise, timeoutPromise]) as any
+      console.log('Supabase response:', { data, error })
       
-      if (result.error) {
-        console.error('SMS config error:', result.error)
-        throw result.error
+      if (error) {
+        console.error('SMS config error:', error)
+        throw error
       }
       
-      console.log('SMS config saved successfully:', result.data)
+      console.log('SMS config saved successfully:', data)
       
       setEventSmsConfigs(prev => {
         const filtered = prev.filter(cfg => !(cfg.event_id === eventId && cfg.purpose === purpose))
-        return [result.data, ...filtered]
+        return [data, ...filtered]
       })
     } catch (err) {
       console.error('Failed to save SMS config:', err)

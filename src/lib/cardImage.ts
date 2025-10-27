@@ -4,6 +4,12 @@ import QRCode from 'qrcode';
 
 // Helper to fill variables in text
 export function fillCardVariables(text: string, guest: any, event: any, eventAttributes: any[] = []) {
+  console.log('fillCardVariables called with:', {
+    guestName: guest.name,
+    cardType: guest.card_type,
+    text
+  });
+  
   let filledText = text
     .replace(/\{\{guest_name\}\}/g, guest.name)
     .replace(/\{\{event_name\}\}/g, event.name)
@@ -13,6 +19,8 @@ export function fillCardVariables(text: string, guest: any, event: any, eventAtt
     .replace(/\{\{plus_one_name\}\}/g, guest.plus_one_name || "")
     .replace(/\{\{card_type\}\}/g, guest.card_type || "")
     .replace(/\{\{qr_code\}\}/g, guest.id);
+  
+  console.log('After variable replacement:', filledText);
 
   // Replace event attribute variables
   eventAttributes.forEach(attr => {
@@ -89,8 +97,14 @@ export async function generateCardImageForGuest(
   eventAttributes: any[] = []
 ): Promise<string> {
   const dom = await renderCardDOM(cardDesign, guest, event, eventAttributes);
+  
+  // Calculate scale factor for high quality (2x for retina-like quality)
+  const scale = 2;
   const canvas = await html2canvas(dom, {
     useCORS: true,
+    scale: scale,
+    logging: false,
+    backgroundColor: '#ffffff'
   });
   const dataUrl = canvas.toDataURL("image/png");
   document.body.removeChild(dom);

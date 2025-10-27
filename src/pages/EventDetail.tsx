@@ -746,10 +746,15 @@ const EditEventModal: React.FC<{
     setLoading(true)
 
     try {
+      console.log('Submitting event update:', event.id, formData)
       await updateEvent(event.id, formData)
+      console.log('Event update successful')
+      alert('Event updated successfully!')
       onClose()
     } catch (error) {
       console.error('Error updating event:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      alert(`Failed to update event: ${errorMessage}`)
     } finally {
       setLoading(false)
     }

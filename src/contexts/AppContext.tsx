@@ -201,17 +201,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   const updateEvent = async (id: string, updates: Partial<Event>) => {
-    const { data, error } = await supabase
-      .from('events')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw error
+    console.log('Updating event:', id, updates)
     
-    setEvents(prev => prev.map(event => event.id === id ? data : event))
-    await addActivity('event_updated', `Updated event "${data.name}"`, id)
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Update timeout after 30 seconds')), 30000)
+    )
+    
+    try {
+      const updatePromise = supabase
+        .from('events')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      const { data, error } = await Promise.race([updatePromise, timeoutPromise]) as any
+
+      if (error) {
+        console.error('Error updating event:', error)
+        throw error
+      }
+      
+      console.log('Event updated successfully:', data)
+      setEvents(prev => prev.map(event => event.id === id ? data : event))
+      
+      // Don't wait for activity to complete - it can hang
+      addActivity('event_updated', `Updated event "${data.name}"`, id).catch(err => console.error('Activity logging failed:', err))
+    } catch (err) {
+      console.error('Failed to update event:', err)
+      throw err
+    }
   }
 
   const deleteEvent = async (id: string) => {

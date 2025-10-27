@@ -523,17 +523,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   const setEventSmsConfig = async (eventId: string, purpose: 'reminder' | 'invitation', smsTemplateId: string) => {
-    // Upsert config
-    const { data, error } = await supabase
-      .from('event_sms_configurations')
-      .upsert([{ event_id: eventId, purpose, sms_template_id: smsTemplateId }], { onConflict: 'event_id,purpose' })
-      .select()
-      .single()
-    if (error) throw error
-    setEventSmsConfigs(prev => {
-      const filtered = prev.filter(cfg => !(cfg.event_id === eventId && cfg.purpose === purpose))
-      return [data, ...filtered]
-    })
+    console.log('Setting SMS config:', { eventId, purpose, smsTemplateId })
+    
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('SMS config update timeout after 30 seconds')), 30000)
+    )
+    
+    try {
+      // Upsert config with timeout
+      const upsertPromise = supabase
+        .from('event_sms_configurations')
+        .upsert([{ event_id: eventId, purpose, sms_template_id: smsTemplateId }], { onConflict: 'event_id,purpose' })
+        .select()
+        .single()
+      
+      const result = await Promise.race([upsertPromise, timeoutPromise]) as any
+      
+      if (result.error) {
+        console.error('SMS config error:', result.error)
+        throw result.error
+      }
+      
+      console.log('SMS config saved successfully:', result.data)
+      
+      setEventSmsConfigs(prev => {
+        const filtered = prev.filter(cfg => !(cfg.event_id === eventId && cfg.purpose === purpose))
+        return [result.data, ...filtered]
+      })
+    } catch (err) {
+      console.error('Failed to save SMS config:', err)
+      throw err
+    }
   }
 
   const deleteEventSmsConfig = async (eventId: string, purpose: 'reminder' | 'invitation') => {

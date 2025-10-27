@@ -71,16 +71,25 @@ const EventConfigurations: React.FC = () => {
   const handleSaveSmsConfig = async () => {
     if (!eventId) return;
     setSaving(true);
+    console.log('Saving SMS config for event:', eventId);
+    console.log('Invitation template:', selectedInvitationTemplate);
+    console.log('Reminder template:', selectedReminderTemplate);
+    
     try {
       if (selectedInvitationTemplate) {
+        console.log('Saving invitation SMS config...');
         await setEventSmsConfig(eventId, 'invitation', selectedInvitationTemplate);
       }
       if (selectedReminderTemplate) {
+        console.log('Saving reminder SMS config...');
         await setEventSmsConfig(eventId, 'reminder', selectedReminderTemplate);
       }
-      alert('SMS configuration saved!');
+      console.log('SMS configuration saved successfully');
+      alert('SMS configuration saved successfully!');
     } catch (err) {
-      alert('Failed to save SMS configuration.');
+      console.error('Failed to save SMS configuration:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to save SMS configuration: ${errorMessage}`);
     } finally {
       setSaving(false);
     }

@@ -4,10 +4,12 @@ import QRCode from 'qrcode';
 
 // Helper to fill variables in text
 export function fillCardVariables(text: string, guest: any, event: any, eventAttributes: any[] = []) {
-  console.log('fillCardVariables called with:', {
+  const cardTypeValue = guest.card_type || '';
+  console.log('[fillCardVariables]', {
     guestName: guest.name,
-    cardType: guest.card_type,
-    text
+    guestCardType: guest.card_type,
+    cardTypeValue,
+    originalText: text
   });
   
   let filledText = text
@@ -17,10 +19,10 @@ export function fillCardVariables(text: string, guest: any, event: any, eventAtt
     .replace(/\{\{event_time\}\}/g, event.time)
     .replace(/\{\{event_venue\}\}/g, event.venue)
     .replace(/\{\{plus_one_name\}\}/g, guest.plus_one_name || "")
-    .replace(/\{\{card_type\}\}/g, guest.card_type || "")
+    .replace(/\{\{card_type\}\}/g, cardTypeValue)
     .replace(/\{\{qr_code\}\}/g, guest.id);
   
-  console.log('After variable replacement:', filledText);
+  console.log('[fillCardVariables] After replacement:', filledText);
 
   // Replace event attribute variables
   eventAttributes.forEach(attr => {
@@ -96,6 +98,14 @@ export async function generateCardImageForGuest(
   event: any,
   eventAttributes: any[] = []
 ): Promise<string> {
+  console.log('[generateCardImageForGuest] Guest data:', {
+    id: guest.id,
+    name: guest.name,
+    card_type: guest.card_type,
+    card_count: guest.card_count,
+    fullGuestObject: guest
+  });
+  
   const dom = await renderCardDOM(cardDesign, guest, event, eventAttributes);
   
   // Calculate scale factor for high quality (2x for retina-like quality)
